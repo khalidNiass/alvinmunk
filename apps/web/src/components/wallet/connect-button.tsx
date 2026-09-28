@@ -8,6 +8,7 @@ import { useWallet } from './wallet-provider';
 import { Crest } from '@/components/brand/crest';
 import { buttonVariants } from '@/components/ui/button';
 import { cn, shortAddress } from '@/lib/utils';
+import { useLocale, useTranslations } from '@/lib/i18n';
 
 /**
  * Navbar identity. No profile → a primary "Open app" CTA (onboarding lives in /app).
@@ -15,6 +16,8 @@ import { cn, shortAddress } from '@/lib/utils';
  * address, Disconnect) — the disconnect path that was previously missing.
  */
 export function ConnectButton() {
+  const t = useTranslations();
+  const { locale } = useLocale();
   const { profile, balance, disconnect } = useWallet();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -36,7 +39,7 @@ export function ConnectButton() {
   if (!profile) {
     return (
       <Link href="/app" className={cn(buttonVariants({ size: 'sm' }))}>
-        Open app
+        {t('wallet.openApp')}
       </Link>
     );
   }
@@ -46,7 +49,7 @@ export function ConnectButton() {
 
   async function copyAddress() {
     await navigator.clipboard.writeText(profile!.address);
-    toast.success('Address copied');
+    toast.success(t('wallet.addressCopied'));
     setOpen(false);
   }
 
@@ -71,15 +74,20 @@ export function ConnectButton() {
           <div className="px-3 py-2">
             <p className="font-mono text-xs text-muted-foreground">{shortAddress(profile.address)}</p>
             {balance != null && (
-              <p className="mt-0.5 text-xs text-muted-foreground">{Number(balance).toFixed(1)} XLM</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {new Intl.NumberFormat(locale === 'tr' ? 'tr-TR' : 'en-US', {
+                  minimumFractionDigits: 1,
+                  maximumFractionDigits: 1,
+                }).format(Number(balance))} XLM
+              </p>
             )}
           </div>
           <div className="my-1 h-px bg-border" />
           <Link href={`/u/${profile.handle}`} role="menuitem" onClick={() => setOpen(false)} className={item}>
-            <User /> View profile
+            <User /> {t('wallet.viewProfile')}
           </Link>
           <button role="menuitem" onClick={copyAddress} className={item}>
-            <Copy /> Copy address
+            <Copy /> {t('wallet.copyAddress')}
           </button>
           <div className="my-1 h-px bg-border" />
           <button
@@ -87,11 +95,11 @@ export function ConnectButton() {
             onClick={() => {
               disconnect();
               setOpen(false);
-              toast('Disconnected — your profile stays on-chain.');
+              toast(t('wallet.disconnected'));
             }}
             className={cn(item, 'text-destructive hover:bg-destructive/10')}
           >
-            <LogOut /> Disconnect
+            <LogOut /> {t('wallet.disconnect')}
           </button>
         </div>
       )}
