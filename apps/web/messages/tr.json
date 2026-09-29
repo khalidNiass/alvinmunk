@@ -238,7 +238,7 @@
   "statStrip.social.label": "Sosyal XP",
   "statStrip.social.hint": "İtibar · nakde çevrilemez",
   "statStrip.earned.label": "Kazanılan XP",
-  "statStrip.earned.hint": "Doğrulanmış · USDC'yi açar",
+  "statStrip.earned.hint": "Doğrulanmış · USDC'nin kilidini açar",
   "statStrip.empty.title": "Takımyıldızın henüz sessiz",
   "statStrip.empty.body": "İlk destek, görev veya bahşiş itibar izini aydınlatır ve bu şeridi yaşayan bir özgeçmişe dönüştürür.",
 
@@ -247,7 +247,7 @@
   "identity.handleStamped": "@{handle} zincire damgalandı.",
   "identity.claimFailed": "Bu kullanıcı adı alınamadı.",
   "identity.newHandle": "Yeni kullanıcı adı",
-  "identity.stamp": "Damgala",
+  "identity.stamp": "damgala",
   "identity.cancel": "İptal",
   "identity.changeFace": "Yüzünü değiştir",
   "identity.onChain": "zincir üzerinde",
