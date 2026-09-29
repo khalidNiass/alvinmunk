@@ -3,14 +3,33 @@
 import { useEffect, useState } from 'react';
 import { Bell } from 'lucide-react';
 import { toast } from '@/components/ui/toaster';
-import { pollNewlyClaimed } from '@/lib/myvouches';
+import { useWallet } from '@/components/wallet/wallet-provider';
+import { pollNewlyClaimed, getPendingVouchIds } from '@/lib/myvouches';
 import {
   registerServiceWorker,
   requestPermission,
   getPermission,
   getActivePushSubscription,
+  getPushAvailabilityHint,
+  syncPushSubscription,
 } from '@/lib/push';
 import { useLocale, useTranslations } from '@/lib/i18n';
+
+/**
+ * Give the service worker the owning wallet address so its pushsubscriptionchange handler
+ * can prove ownership when PATCHing /api/push/subscribe (localStorage is unavailable
+ * inside a service worker). Best-effort — if it fails the SW falls back to a plain re-subscribe.
+ */
+async function shareWalletWithServiceWorker(walletAddress: string): Promise<void> {
+  try {
+    const reg = await registerServiceWorker();
+    if (!reg || !reg.active) return;
+    const cache = await caches.open('alvinmunk-push-meta');
+    await cache.put('/__push/wallet', new Response(JSON.stringify({ walletAddress })));
+  } catch {
+    // Ignore — best-effort.
+  }
+}
 
 /**
  * VouchClaimedNotice
@@ -50,8 +69,29 @@ export function VouchClaimedNotice() {
     };
   }, [locale, t]);
 
+  // ─── 1b. Rotation re-sync (#169) ──────────────────────────────────────────
+  // Push services rotate endpoints; a rotated subscription used to never reach the
+  // server again (the next notify 410s and prunes it). On every dashboard mount, if
+  // permission is granted and the active endpoint differs from the last one the server
+  // acknowledged, move the stored record (PATCH) so notifications keep flowing.
+  const { profile } = useWallet();
+  const walletAddress = profile?.address;
+  useEffect(() => {
+    if (!walletAddress) return;
+    let alive = true;
+    syncPushSubscription(walletAddress, () => getPendingVouchIds())
+      .catch(() => {})
+      .finally(() => {
+        if (alive) void shareWalletWithServiceWorker(walletAddress);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [walletAddress]);
+
   // ─── 2. Push opt-in prompt ─────────────────────────────────────────────────
   const [showBanner, setShowBanner] = useState(false);
+  const [pushAvailabilityHint, setPushAvailabilityHint] = useState<string | null>(null);
   const [requesting, setRequesting] = useState(false);
 
   useEffect(() => {
@@ -61,6 +101,13 @@ export function VouchClaimedNotice() {
     //   • VAPID public key is configured (no key → push is disabled in this deploy)
     //   • We don't already have an active subscription
 
+    if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) return;
+    const availabilityHint = getPushAvailabilityHint();
+    if (availabilityHint) {
+      setPushAvailabilityHint(availabilityHint);
+      setShowBanner(true);
+      return;
+    }
     if (
       typeof window === 'undefined' ||
       !('serviceWorker' in navigator) ||
@@ -69,7 +116,6 @@ export function VouchClaimedNotice() {
     ) {
       return;
     }
-    if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) return;
     if (Notification.permission !== 'default') return;
 
     // Check if already subscribed (e.g. from a previous session).
@@ -110,15 +156,17 @@ export function VouchClaimedNotice() {
     >
       <Bell className="size-4 shrink-0 text-primary" aria-hidden />
       <p className="text-sm text-foreground">
-        {t('vouchNotice.push.prompt')}
+        {pushAvailabilityHint ? t('vouchNotice.push.installHint') : t('vouchNotice.push.prompt')}
       </p>
-      <button
-        onClick={handleEnable}
-        disabled={requesting}
-        className="ml-1 shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-80 disabled:opacity-50"
-      >
-        {requesting ? t('vouchNotice.push.enabling') : t('vouchNotice.push.enable')}
-      </button>
+      {!pushAvailabilityHint && (
+        <button
+          onClick={handleEnable}
+          disabled={requesting}
+          className="ml-1 shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-80 disabled:opacity-50"
+        >
+          {requesting ? t('vouchNotice.push.enabling') : t('vouchNotice.push.enable')}
+        </button>
+      )}
       <button
         onClick={() => setShowBanner(false)}
         aria-label={t('vouchNotice.push.dismiss')}
